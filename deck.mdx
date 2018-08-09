@@ -1,28 +1,356 @@
 export theme from './theme'
+import { Split } from 'mdx-deck/layouts'
+import GroupList from './GroupList';
+import DiscussionList from './DiscussionList';
 
-# GraphQL with Apollo library
+# GraphQL with Apollo
+Example using social groups api
 
-Mattia
+Mattia Asti - 09/08/2018
 ---
 
-## GraphQL - Schema
+## Define your schema
+```graphql
+type PostConversation {
+  postId: ID!
+  type: PostType!
+  timestamp: Date!
+  content: String
+  commentsTimeline: CommentsTimeline
+  commentsTotal: Int
+  liked: Boolean
+  likesTotal: Int
+  author: User!
+}
+```
+---
 
-```jsx
-type User {
-  userId
-  name
-  surname
+
+## Define queries
+```graphql
+type Query {
+  listGroups: [Group]
+  getGroup(groupId: ID!): Group
+  listPosts(groupId: ID!): PostsTimeline
+  getPost(postId: ID!): Post
+  listComments(postId: ID!): CommentsTimeline
 }
 ```
 
+---
+
+## Define mutations
+```graphql
+type Mutation {
+  joinGroup(groupId: ID!): Group
+  leaveGroup(groupId: ID!): Group
+  getPost(postId: ID!): Post
+  addPost(groupId: ID!, content: String!): PostConversation
+  editPost(postId: ID!, content: String!): PostConversation
+  deletePost(postId: ID!): PostConversation
+  toggleLikePost(postId: ID!): PostConversation
+  addComment(postId: ID!, content: String!): Comment
+  editComment(commentId: ID!, content: String!): Comment
+  deleteComment(commentId: ID!): PostConversation
+}
+```
+
+---
+## apollo-boost
+(simple usage)
+```
+npm i apollo-boost react-apollo graphql
+```
 ```jsx
-<Hello />
+import ApolloClient from "apollo-boost";
+import { ApolloProvider } from 'react-apollo';
+ 
+const client = new ApolloClient({
+  uri: "https://where-my-service.lives"
+});
+ 
+const Root = () => (
+  <ApolloProvider client={client}>
+    <App />
+  </ApolloProvider>
+)
 ```
 ---
+## apollo-client & plugins
+(advanced usage)
+```
+npm i apollo-client react-apollo
+  apollo-link-http apollo-link-context
+  apollo-link-error apollo-cache-inmemory
+```
+
+---
+Example: setting custom auth headers
+```js
+import { setContext } from 'apollo-link-context';
+ 
+const httpLink = createHttpLink({
+  uri: "https://where-my-service.lives"
+});
+ 
+const authLink = setContext((_, { headers }) => ({
+  headers: {
+    ...headers,
+    'Authorization': 'Bearer __my__token'
+  },
+}));
+ 
+const apolloClient = new ApolloClient({
+  link: authLink.concat(httpLink),
+});
+```
+
+---
+## Query on the client
+
 ```jsx
-<CodeSnippet />
+import { Query } from 'react-apollo';
+ 
+const MyComponent = (props) => (
+  <Query query={QUERY} variables={VARIABLES}>
+    {({ loading, error, data }) => {
+      if (loading) {
+        // show loading state
+      }
+      if (error) {
+        // handle error
+      }
+      // data available
+      return (
+        <div />
+      )
+    }}
+  </Query>
+);
 ```
 ---
-hello world
+# DEMO TIME
+
+<img src="drum.gif" />
+
+- Show a list of groups
+- Join/Leave a group
+- Add a new conversation
 ---
-# The end
+## Query component
+```jsx
+const GroupList = (props) => (
+  <Query query={LIST_GROUPS}>
+    {({ loading, error, data }) => {
+      if (loading) {
+        return <div>...loading</div>
+      }
+      if (error) {
+        return <div>ERROR</div>
+      }
+      // data available
+      const myGroups = groups
+        .filter(g => g.isMember);
+      const otherGroups = groups
+        .filter(g => !g.isMember);
+      return // UI
+    }}
+  </Query>
+);
+```
+
+---
+## Query definition
+```jsx
+const LIST_GROUPS = gql`
+  query {
+    listGroups{
+      groupId
+      name
+      isMember
+    }
+  }
+`;
+```
+---
+export default Split
+
+```jsx
+<div style={{ margin: '0 40px'}}>
+  <h2>My Groups</h2>
+  {myGroups.map(({ groupId, name }) => (
+    <div style={Styles.group} key={groupId}>
+      {name}
+      <button>LEAVE GROUP</button>
+    </div>
+  ))}
+
+  <h2>Available Groups</h2>
+  {otherGroups.map(({ groupId, name }) => (
+    <div style={Styles.group} key={groupId}>
+      {name}
+      <button>JOIN GROUP</button>
+    </div>
+  ))}
+</div>
+```
+<GroupList />
+---
+
+export default Split
+
+```jsx
+import { Mutation } from 'react-apollo';
+ 
+const JOIN_GROUP = gql`
+ mutation joinGroup($groupId: ID!) {
+   joinGroup(groupId: $groupId) {
+     groupId
+     isMember
+   }
+ }
+`;
+ 
+<Mutation
+  mutation={JOIN_GROUP}
+  variables={{ groupId }}
+>
+  {(joinGroup) => (
+    <button
+      onClick={joinGroup}
+      style={Styles.btn}
+    >
+      JOIN GROUP
+    </button>
+  )}
+</Mutation>
+```
+
+## Join/Leave a group
+
+<GroupList />
+
+---
+## Internal cache
+```jsx
+const apolloClient = new ApolloClient({
+  link: errorLink.concat(authLink.concat(httpLink)),
+  cache: new InMemoryCache({
+    dataIdFromObject: object => {
+      switch (object.__typename) {
+        case 'PostConversation': return object.postId;
+        case 'Comment': return object.commentId;
+        case 'Group': return object.groupId;
+        default: return defaultDataIdFromObject(object);
+      }
+    }
+  })
+});
+```
+
+---
+
+export default Split
+
+```jsx
+const LIST_POSTS = gql`
+  query listPosts($groupId: ID!) {
+    listPosts(groupId: $groupId) {
+      posts {
+        ... on PostConversation {
+          postId
+          content
+          author {
+            id
+            name
+            avatarUrl
+          }
+        }
+      }
+    }
+  }
+`;
+```
+
+<DiscussionList />
+
+---
+
+export default Split
+
+```jsx
+const ADD_POST = gql`
+  mutation addPost($groupId: ID!, $content: String!) {
+    addPost(groupId: $groupId, content: $content) {
+      postId
+      content
+      timestamp
+      author {
+        id
+        name
+      }
+    }
+  }
+`;
+```
+
+<DiscussionList showEditor disableUpdate />
+
+---
+## Manually update the cache
+```jsx
+<Mutation
+  mutation={ADD_POST} 
+  variables={{
+    groupId: "a56d9b6e-a93c-46b1-9a60-9fdcc2abd4c9",
+    content: this.state.text,
+  }}
+  update={(cache, mutationResult) => { ... }
+>
+```
+
+---
+```jsx
+<Mutation
+  update={(cache, mutationResult) => {
+    const newPost = mutationResult.data.addPost;
+    // read existing data in the apollo cache
+    const listPostsQuery = apolloClient.readQuery({
+      query: LIST_POSTS,
+      variables: {
+        groupId
+      }
+    });
+  }}
+>
+```
+
+---
+```jsx
+// add new post at the beginning
+const updatedPostList = [
+  newPost,
+  ...listPosts.posts
+];
+// update the apollo cache
+apolloClient.writeQuery({
+  query: LIST_POSTS,
+  variables: {
+    groupId
+  },
+  data: {
+    listPosts: {
+      ...listPosts,
+      posts: updatedPostList
+    }
+  }
+});
+```
+---
+
+<DiscussionList showEditor />
+---
+import { Image } from 'mdx-deck'
+
+<Image src="end.jpg" />
+
